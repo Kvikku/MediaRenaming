@@ -39,6 +39,15 @@ def _c(text: str, *codes: str) -> str:
     return "".join(codes) + text + RESET
 
 
+def _format_size(size_bytes: int) -> str:
+    """Format a byte count as a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB"):
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}" if unit != "B" else f"{size_bytes} B"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
+
 # ── Box-drawing helpers ──────────────────────────────────────────────────────
 
 W = 62  # inner width of the box
@@ -378,18 +387,25 @@ def launch_interactive_ui(initial_path: str | None = None,
 
             # Delete junk files
             deleted_count = 0
+            freed_bytes = 0
             for jf in junk_files:
                 if apply_changes:
                     try:
+                        size = jf.stat().st_size
                         jf.unlink()
                     except OSError as exc:
                         print(f"  {_c('✖', FG_RED, BOLD)}  {jf.name}")
                         print(f"     {_c('⚠', FG_YELLOW)}  {exc}")
                         continue
                     deleted_count += 1
-                    print(f"  {_c('✔', FG_RED)}  Deleted: {jf.name}")
+                    freed_bytes += size
+                    print(f"  {_c('✔', FG_RED)}  Deleted: {jf.name}  {_c(f'({_format_size(size)})', DIM)}")
                 else:
-                    print(f"  {_c('…', FG_YELLOW)}  Would delete: {jf.name}")
+                    try:
+                        size = jf.stat().st_size
+                        print(f"  {_c('…', FG_YELLOW)}  Would delete: {jf.name}  {_c(f'({_format_size(size)})', DIM)}")
+                    except OSError:
+                        print(f"  {_c('…', FG_YELLOW)}  Would delete: {jf.name}")
 
             if not apply_changes:
                 print(f"\n  {_c('ℹ', FG_CYAN)}  Dry-run complete. Toggle mode (6) to apply for real.")
@@ -403,6 +419,8 @@ def launch_interactive_ui(initial_path: str | None = None,
                     print(f"\n  {_c('⚠', FG_YELLOW, BOLD)}  Done with {failed} failure(s).")
                 else:
                     print(f"\n  {_c('🎉', BOLD)}  All done! Renames applied and junk cleaned up.")
+                if deleted_count:
+                    print(f"  {_c('🗑️', BOLD)}  Deleted {_c(str(deleted_count), FG_RED, BOLD)} junk file(s), freed {_c(_format_size(freed_bytes), FG_GREEN, BOLD)}.")
                 file_mappings = plan_file_renames(root)
                 folder_mappings = plan_folder_renames(root)
                 junk_files = find_junk_files(root)

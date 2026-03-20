@@ -10,6 +10,15 @@ from .storage import record_renames
 from .tui import launch_interactive_ui
 
 
+def _format_size(size_bytes: int) -> str:
+    """Format a byte count as a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB"):
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}" if unit != "B" else f"{size_bytes} B"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
+
 def run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> list[tuple[Path, Path]]:
     """Execute or preview renames based on the apply flag.
 
@@ -76,24 +85,31 @@ def main() -> int:
 
     # Delete junk files
     deleted_count = 0
+    freed_bytes = 0
     for jf in junk_files:
         if args.apply:
             try:
+                size = jf.stat().st_size
                 jf.unlink()
             except OSError as exc:
                 print(f"FAILED to delete: {jf}  ({exc})")
                 continue
             deleted_count += 1
-            print(f"Deleted: {jf}")
+            freed_bytes += size
+            print(f"Deleted: {jf}  ({_format_size(size)})")
         else:
-            print(f"Dry-run: would delete {jf}")
+            try:
+                size = jf.stat().st_size
+                print(f"Dry-run: would delete {jf}  ({_format_size(size)})")
+            except OSError:
+                print(f"Dry-run: would delete {jf}")
 
     if args.apply:
         all_applied = applied_files + applied_folders
         if all_applied:
             record_renames(root, all_applied)
         if deleted_count:
-            print(f"Deleted {deleted_count} junk file(s).")
+            print(f"Deleted {deleted_count} junk file(s), freed {_format_size(freed_bytes)}.")
     else:
         print("Dry-run completed. Re-run with --apply to rename files and delete junk.")
     return 0
