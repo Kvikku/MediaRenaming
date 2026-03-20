@@ -6,7 +6,7 @@ import re
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts"}
 
-SIDECAR_EXTENSIONS = {".srt", ".sub", ".idx", ".ass", ".ssa", ".nfo", ".txt", ".jpg", ".png"}
+SUBTITLE_EXTENSIONS = {".srt", ".sub", ".idx", ".ass", ".ssa"}
 
 TOKEN_SET = {
     "bluray",

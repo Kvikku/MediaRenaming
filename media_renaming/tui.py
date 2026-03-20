@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .planner import plan_file_renames, plan_folder_renames
+from .planner import find_junk_files, plan_file_renames, plan_folder_renames
 from .storage import load_recent_folders, save_recent_folder, record_renames, load_history
 
 # ── ANSI helpers ─────────────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ def _run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> list
 # ── Header / status ─────────────────────────────────────────────────────────
 
 def _print_header(root: Path | None, apply_changes: bool,
-                  file_count: int, folder_count: int) -> None:
+                  file_count: int, folder_count: int, junk_count: int) -> None:
     print(_c(LOGO, FG_CYAN, BOLD))
     print(_box_top())
 
@@ -141,8 +141,10 @@ def _print_header(root: Path | None, apply_changes: bool,
 
     files_str = _c(str(file_count), FG_GREEN, BOLD) if file_count else _c("0", DIM)
     folders_str = _c(str(folder_count), FG_GREEN, BOLD) if folder_count else _c("0", DIM)
+    junk_str = _c(str(junk_count), FG_RED, BOLD) if junk_count else _c("0", DIM)
     print(_box_row(f"🎬  File renames   : {files_str}", pad=W - 1))
     print(_box_row(f"📁  Folder renames : {folders_str}", pad=W - 1))
+    print(_box_row(f"🗑️   Junk files     : {junk_str}", pad=W - 1))
 
     print(_box_bottom())
 
@@ -154,10 +156,11 @@ MENU_ITEMS = [
     ("2", "🔄", "Scan folder & refresh plan"),
     ("3", "🎬", "Preview file renames"),
     ("4", "📁", "Preview folder renames"),
-    ("5", "🔀", "Toggle mode (dry-run / apply)"),
-    ("6", "🚀", "Run planned operation"),
-    ("7", "�", "View rename history"),
-    ("8", "�👋", "Exit"),
+    ("5", "�️", "Preview junk files to delete"),
+    ("6", "🔀", "Toggle mode (dry-run / apply)"),
+    ("7", "🚀", "Run planned operation"),
+    ("8", "📜", "View rename history"),
+    ("9", "👋", "Exit"),
 ]
 
 
@@ -257,6 +260,7 @@ def launch_interactive_ui(initial_path: str | None = None,
     root: Path | None = None
     file_mappings: list[tuple[Path, Path]] = []
     folder_mappings: list[tuple[Path, Path]] = []
+    junk_files: list[Path] = []
     apply_changes = apply_default
 
     if initial_path:
@@ -266,19 +270,21 @@ def launch_interactive_ui(initial_path: str | None = None,
             save_recent_folder(root)
             file_mappings = plan_file_renames(root)
             folder_mappings = plan_folder_renames(root)
+            junk_files = find_junk_files(root)
     else:
         recent = load_recent_folders()
         if recent and Path(recent[0]).is_dir():
             root = Path(recent[0])
             file_mappings = plan_file_renames(root)
             folder_mappings = plan_folder_renames(root)
+            junk_files = find_junk_files(root)
 
     while True:
         _clear_screen()
-        _print_header(root, apply_changes, len(file_mappings), len(folder_mappings))
+        _print_header(root, apply_changes, len(file_mappings), len(folder_mappings), len(junk_files))
         _print_menu()
 
-        choice = input(f"  {_c('❯', FG_CYAN, BOLD)} Enter choice [1-8]: ").strip()
+        choice = input(f"  {_c('❯', FG_CYAN, BOLD)} Enter choice [1-9]: ").strip()
 
         # 1 — Select folder
         if choice == "1":
@@ -288,6 +294,7 @@ def launch_interactive_ui(initial_path: str | None = None,
                 save_recent_folder(root)
                 file_mappings = plan_file_renames(root)
                 folder_mappings = plan_folder_renames(root)
+                junk_files = find_junk_files(root)
                 print(f"\n  {_c('✔', FG_GREEN, BOLD)}  Folder selected & plan updated.")
             _pause()
             continue
@@ -299,6 +306,7 @@ def launch_interactive_ui(initial_path: str | None = None,
             else:
                 file_mappings = plan_file_renames(root)
                 folder_mappings = plan_folder_renames(root)
+                junk_files = find_junk_files(root)
                 print(f"  {_c('✔', FG_GREEN, BOLD)}  Plan refreshed.")
             _pause()
             continue
@@ -315,8 +323,23 @@ def launch_interactive_ui(initial_path: str | None = None,
             _pause()
             continue
 
-        # 5 — Toggle mode
+        # 5 — Preview junk
         if choice == "5":
+            total = len(junk_files)
+            print(f"\n  🗑️   {_c('Junk files to delete', BOLD, FG_CYAN)}  {_c(f'({total} found)', DIM)}")
+            print(f"  {'─' * 58}")
+            if not junk_files:
+                print(f"  {_c('No junk files found.', DIM)}")
+            else:
+                for jf in junk_files[:30]:
+                    print(f"    {_c('✖', FG_RED)}  {jf.relative_to(root) if root else jf}")
+                if total > 30:
+                    print(f"\n  {_c(f'… and {total - 30} more', DIM)}")
+            _pause()
+            continue
+
+        # 6 — Toggle mode
+        if choice == "6":
             apply_changes = not apply_changes
             tag = (
                 _c(" LIVE ", BG_RED, FG_WHITE, BOLD)
@@ -327,21 +350,21 @@ def launch_interactive_ui(initial_path: str | None = None,
             _pause()
             continue
 
-        # 6 — Execute
-        if choice == "6":
+        # 7 — Execute
+        if choice == "7":
             if root is None:
                 print(f"  {_c('⚠', FG_YELLOW)}  Set a folder first (option 1).")
                 _pause()
                 continue
 
-            if not file_mappings and not folder_mappings:
-                print(f"  {_c('✔', FG_GREEN)}  Nothing to rename — all names look good!")
+            if not file_mappings and not folder_mappings and not junk_files:
+                print(f"  {_c('✔', FG_GREEN)}  Nothing to do — all names look good and no junk found!")
                 _pause()
                 continue
 
             if apply_changes:
                 ok = _prompt_yes_no(
-                    f"{_c('⚠', FG_YELLOW)}  This will rename files & folders. Continue?",
+                    f"{_c('⚠', FG_YELLOW)}  This will rename files & folders and delete junk. Continue?",
                     default=False,
                 )
                 if not ok:
@@ -353,33 +376,49 @@ def launch_interactive_ui(initial_path: str | None = None,
             applied_files = _run_renames(file_mappings, apply_changes)
             applied_folders = _run_renames(folder_mappings, apply_changes)
 
+            # Delete junk files
+            deleted_count = 0
+            for jf in junk_files:
+                if apply_changes:
+                    try:
+                        jf.unlink()
+                    except OSError as exc:
+                        print(f"  {_c('✖', FG_RED, BOLD)}  {jf.name}")
+                        print(f"     {_c('⚠', FG_YELLOW)}  {exc}")
+                        continue
+                    deleted_count += 1
+                    print(f"  {_c('✔', FG_RED)}  Deleted: {jf.name}")
+                else:
+                    print(f"  {_c('…', FG_YELLOW)}  Would delete: {jf.name}")
+
             if not apply_changes:
-                print(f"\n  {_c('ℹ', FG_CYAN)}  Dry-run complete. Toggle mode (5) to apply for real.")
+                print(f"\n  {_c('ℹ', FG_CYAN)}  Dry-run complete. Toggle mode (6) to apply for real.")
             else:
                 all_applied = applied_files + applied_folders
                 if all_applied:
                     record_renames(root, all_applied)
-                total = len(file_mappings) + len(folder_mappings)
-                failed = total - len(all_applied)
+                total = len(file_mappings) + len(folder_mappings) + len(junk_files)
+                failed = total - len(all_applied) - deleted_count
                 if failed:
                     print(f"\n  {_c('⚠', FG_YELLOW, BOLD)}  Done with {failed} failure(s).")
                 else:
-                    print(f"\n  {_c('🎉', BOLD)}  All done! Renames applied successfully.")
+                    print(f"\n  {_c('🎉', BOLD)}  All done! Renames applied and junk cleaned up.")
                 file_mappings = plan_file_renames(root)
                 folder_mappings = plan_folder_renames(root)
+                junk_files = find_junk_files(root)
             _pause()
             continue
 
-        # 7 — View history
-        if choice == "7":
+        # 8 — View history
+        if choice == "8":
             _print_history()
             _pause()
             continue
 
-        # 8 — Exit
-        if choice == "8":
+        # 9 — Exit
+        if choice == "9":
             print(f"\n  {_c('👋  See you!', FG_CYAN, BOLD)}\n")
             return 0
 
-        print(f"  {_c('⚠', FG_YELLOW)}  Invalid choice — pick a number from 1 to 8.")
+        print(f"  {_c('⚠', FG_YELLOW)}  Invalid choice — pick a number from 1 to 9.")
         _pause()
