@@ -7,12 +7,15 @@ import re
 from .constants import (
     AUDIO_CHANNEL_RE,
     BRACKET_RE,
+    COMPOUND_TOKEN_RE,
     FRAMERATE_RE,
     MULTISPACE_RE,
     NORMALIZED_TOKEN_SET,
+    RELEASE_GROUP_RE,
     RESOLUTION_RE,
     SEPARATOR_RE,
     TRAILING_GROUP_RE,
+    WEBSITE_RE,
     YEAR_RE,
 )
 
@@ -42,18 +45,24 @@ def normalize_name(stem: str) -> str:
     """Strip metadata and format the cleaned title with an optional year."""
     cleaned = BRACKET_RE.sub(" ", stem)
     cleaned = TRAILING_GROUP_RE.sub("", cleaned)
+    # Strip website watermarks (e.g. www.UIndex.org, YTS.mx)
+    cleaned = WEBSITE_RE.sub(" ", cleaned)
     cleaned = SEPARATOR_RE.sub(" ", cleaned)
+    # Remove compound tokens after dots become spaces (e.g. DDP5 1, H 264)
+    cleaned = COMPOUND_TOKEN_RE.sub(" ", cleaned)
+    # Strip trailing release groups (e.g. -KyoGo, -SPARKS)
+    cleaned = RELEASE_GROUP_RE.sub("", cleaned)
     cleaned = MULTISPACE_RE.sub(" ", cleaned).strip()
 
     words = []
-    year_candidate = None
+    year_candidates = []
     for raw in cleaned.split(" "):
         token = raw.strip("-_")
         if not token:
             continue
         normalized = normalize_token(token)
-        if YEAR_RE.match(token) and year_candidate is None:
-            year_candidate = token
+        if YEAR_RE.match(token):
+            year_candidates.append((len(words), token))
             continue
         if RESOLUTION_RE.match(normalized) or FRAMERATE_RE.match(normalized):
             continue
@@ -63,13 +72,19 @@ def normalize_name(stem: str) -> str:
             continue
         words.append(token)
 
-    # If removing the year left no title words, treat it as part of the title
+    # Use the last year as the release year; earlier years are part of the title
     year = None
-    if year_candidate is not None:
-        if words:
-            year = year_candidate
+    if year_candidates:
+        if words or len(year_candidates) > 1:
+            # Last year found is the release year
+            release_idx, release_year = year_candidates[-1]
+            year = release_year
+            # Re-insert earlier years into the title at their original positions
+            for insert_offset, (pos, yr) in enumerate(year_candidates[:-1]):
+                words.insert(pos + insert_offset, yr)
         else:
-            words.append(year_candidate)
+            # Single year and no title words — treat it as the title
+            words.append(year_candidates[0][1])
 
     title = smart_title(words)
     if not title:
