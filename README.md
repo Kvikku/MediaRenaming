@@ -11,6 +11,21 @@ Clean up video file and folder names by stripping common release metadata and fo
 ## Requirements
 - Python 3.10+ (uses type annotations compatible with 3.10)
 
+## Project Structure
+```text
+MediaRenaming/
+	Rename.py
+	media_renaming/
+		__init__.py
+		cli.py
+		constants.py
+		normalization.py
+		planner.py
+```
+
+- `Rename.py` remains as a compatibility entrypoint.
+- Core logic now lives in small focused modules under `media_renaming/`.
+
 ## Usage
 Dry-run (default):
 ```bash
@@ -20,6 +35,11 @@ python Rename.py "C:\\Path\\To\\Media"
 Apply changes:
 ```bash
 python Rename.py "C:\\Path\\To\\Media" --apply
+```
+
+Module execution (optional):
+```bash
+python -m media_renaming.cli "C:\\Path\\To\\Media" --apply
 ```
 
 If no path is provided, the script prompts for one interactively.
