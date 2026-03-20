@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .constants import VIDEO_EXTENSIONS
+from .constants import SIDECAR_EXTENSIONS, VIDEO_EXTENSIONS
 from .normalization import normalize_name
 
 
@@ -36,8 +36,19 @@ def iter_folders(root: Path) -> list[Path]:
     return sorted(folders, key=lambda p: len(p.parts), reverse=True)
 
 
+def _find_sidecars(video_path: Path) -> list[Path]:
+    """Find sidecar files that share the same stem as the video."""
+    stem = video_path.stem
+    return [
+        p for p in video_path.parent.iterdir()
+        if p.is_file()
+        and p.stem == stem
+        and p.suffix.lower() in SIDECAR_EXTENSIONS
+    ]
+
+
 def plan_file_renames(root: Path) -> list[tuple[Path, Path]]:
-    """Build source/target mappings for file renames."""
+    """Build source/target mappings for file renames (videos + sidecars)."""
     mappings = []
     reserved: set[Path] = set()
     for path in iter_video_files(root):
@@ -47,6 +58,12 @@ def plan_file_renames(root: Path) -> list[tuple[Path, Path]]:
         if path.name == target.name:
             continue
         mappings.append((path, target))
+        # Rename matching sidecar files alongside the video
+        for sidecar in _find_sidecars(path):
+            sidecar_target = sidecar.with_name(f"{target.stem}{sidecar.suffix}")
+            sidecar_target = unique_target_path(sidecar_target, reserved)
+            if sidecar.name != sidecar_target.name:
+                mappings.append((sidecar, sidecar_target))
     return mappings
 
 

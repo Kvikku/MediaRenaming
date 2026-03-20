@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 
-VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov"}
+VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts"}
+
+SIDECAR_EXTENSIONS = {".srt", ".sub", ".idx", ".ass", ".ssa", ".nfo", ".txt", ".jpg", ".png"}
 
 TOKEN_SET = {
     "bluray",

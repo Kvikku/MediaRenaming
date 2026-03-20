@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from .planner import plan_file_renames, plan_folder_renames
+from .storage import record_renames
 from .tui import launch_interactive_ui
 
 
@@ -69,9 +70,13 @@ def main() -> int:
         print("No files or folders need renaming.")
         return 0
 
-    run_renames(file_mappings, args.apply)
-    run_renames(folder_mappings, args.apply)
+    applied_files = run_renames(file_mappings, args.apply)
+    applied_folders = run_renames(folder_mappings, args.apply)
 
-    if not args.apply:
+    if args.apply:
+        all_applied = applied_files + applied_folders
+        if all_applied:
+            record_renames(root, all_applied)
+    else:
         print("Dry-run completed. Re-run with --apply to rename files.")
     return 0
