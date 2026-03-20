@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from .planner import plan_file_renames, plan_folder_renames
+from .tui import launch_interactive_ui
 
 
 def run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> None:
@@ -26,13 +27,22 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Cleanup and rename video files.")
     parser.add_argument("path", nargs="?", help="Root directory containing video files")
     parser.add_argument("--apply", action="store_true", help="Apply renames (default is dry-run)")
+    parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="Open interactive terminal UI",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     """Handle user input, planning, and rename execution."""
     args = parse_args()
-    input_path = args.path or input("Enter a folder path: ").strip()
+    if args.interactive or not args.path:
+        return launch_interactive_ui(initial_path=args.path, apply_default=args.apply)
+
+    input_path = args.path
     if not input_path:
         print("No path provided.")
         return 1

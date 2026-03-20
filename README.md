@@ -32,6 +32,16 @@ Dry-run (default):
 python Rename.py "C:\\Path\\To\\Media"
 ```
 
+Interactive terminal UI (menu-driven):
+```bash
+python Rename.py --interactive
+```
+
+Interactive UI with a preselected folder:
+```bash
+python Rename.py "C:\\Path\\To\\Media" --interactive
+```
+
 Apply changes:
 ```bash
 python Rename.py "C:\\Path\\To\\Media" --apply
@@ -42,7 +52,7 @@ Module execution (optional):
 python -m media_renaming.cli "C:\\Path\\To\\Media" --apply
 ```
 
-If no path is provided, the script prompts for one interactively.
+If no path is provided, the interactive terminal UI opens automatically.
 
 ## Examples
 Input:
