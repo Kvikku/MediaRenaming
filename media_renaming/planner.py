@@ -82,6 +82,34 @@ def find_junk_files(root: Path) -> list[Path]:
     return sorted(junk)
 
 
+def plan_organize(root: Path) -> list[tuple[Path, Path]]:
+    """Plan moves for loose video (and subtitle) files in root into their own folders."""
+    keep_extensions = VIDEO_EXTENSIONS | SUBTITLE_EXTENSIONS
+    mappings = []
+    reserved: set[Path] = set()
+
+    # Collect loose video files sitting directly in the root
+    loose_videos = [
+        p for p in root.iterdir()
+        if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS
+    ]
+
+    for video in loose_videos:
+        folder_name = normalize_name(video.stem)
+        target_dir = root / folder_name
+        target = target_dir / video.name
+        target = unique_target_path(target, reserved)
+        mappings.append((video, target))
+
+        # Move matching subtitle files alongside the video
+        for sub in _find_subtitles(video):
+            sub_target = target_dir / sub.name
+            sub_target = unique_target_path(sub_target, reserved)
+            mappings.append((sub, sub_target))
+
+    return mappings
+
+
 def plan_folder_renames(root: Path) -> list[tuple[Path, Path]]:
     """Build source/target mappings for folder renames."""
     mappings = []

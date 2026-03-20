@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .planner import find_junk_files, plan_file_renames, plan_folder_renames
+from .planner import find_junk_files, plan_file_renames, plan_folder_renames, plan_organize
 from .storage import record_renames
 from .tui import launch_interactive_ui
 
@@ -31,6 +31,7 @@ def run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> list[
     for source, target in mappings:
         if apply_changes:
             try:
+                target.parent.mkdir(parents=True, exist_ok=True)
                 source.rename(target)
             except OSError as exc:
                 print(f"FAILED: {source} -> {target}  ({exc})")
@@ -74,12 +75,14 @@ def main() -> int:
 
     file_mappings = plan_file_renames(root)
     folder_mappings = plan_folder_renames(root)
+    organize_mappings = plan_organize(root)
     junk_files = find_junk_files(root)
 
-    if not file_mappings and not folder_mappings and not junk_files:
-        print("No files or folders need renaming and no junk found.")
+    if not file_mappings and not folder_mappings and not organize_mappings and not junk_files:
+        print("No files or folders need renaming, organizing, or cleaning.")
         return 0
 
+    applied_organize = run_renames(organize_mappings, args.apply)
     applied_files = run_renames(file_mappings, args.apply)
     applied_folders = run_renames(folder_mappings, args.apply)
 
@@ -105,7 +108,7 @@ def main() -> int:
                 print(f"Dry-run: would delete {jf}")
 
     if args.apply:
-        all_applied = applied_files + applied_folders
+        all_applied = applied_organize + applied_files + applied_folders
         if all_applied:
             record_renames(root, all_applied)
         if deleted_count:
