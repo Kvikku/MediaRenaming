@@ -59,6 +59,9 @@ TOKEN_SET = {
     "ma",
     "flac",
     "lpcm",
+    "2ch",
+    "6ch",
+    "8ch",
     # Video quality
     "hdr",
     "hdr10",
@@ -71,6 +74,10 @@ TOKEN_SET = {
     "uhd",
     "imax",
     "3d",
+    # Container formats
+    "mp4",
+    "mkv",
+    "avi",
     # Release tags
     "proper",
     "repack",
@@ -81,6 +88,16 @@ TOKEN_SET = {
     "unrated",
     "directors cut",
     "theatrical",
+    "complete",
+    # Language / multi tags
+    "dual",
+    "dualaudio",
+    "dual-audio",
+    "multi",
+    "multisubs",
+    # Encoder / reenc tags
+    "reenc",
+    "reencode",
 }
 
 NORMALIZED_TOKEN_SET = {re.sub(r"[^a-z0-9]+", "", token.lower()) for token in TOKEN_SET}
@@ -93,10 +110,18 @@ BRACKET_RE = re.compile(r"\[[^\]]*\]|\{[^\}]*\}|<[^>]*>")
 SEPARATOR_RE = re.compile(r"[._]+")
 MULTISPACE_RE = re.compile(r"\s+")
 TRAILING_GROUP_RE = re.compile(r"\s-\s[\w.]+$")
-RELEASE_GROUP_RE = re.compile(r"-[A-Za-z][A-Za-z0-9]*$")
+RELEASE_GROUP_RE = re.compile(r"(?<![SE]\d{2})-[A-Za-z][A-Za-z0-9]*\s*$")
+LANGUAGE_TAG_RE = re.compile(
+    r"\b(?:ger|eng|fre|fra|spa|ita|por|rus|jpn|kor|chi|zho|hin|ara|tur|pol|dut|nld|swe|nor|dan|fin|cze|ces|hun)"
+    r"(?:[-](?:ger|eng|fre|fra|spa|ita|por|rus|jpn|kor|chi|zho|hin|ara|tur|pol|dut|nld|swe|nor|dan|fin|cze|ces|hun))*\b",
+    re.IGNORECASE,
+)
+ORPHAN_PARENS_RE = re.compile(r"\(\s*\)")
+METADATA_PARENS_RE = re.compile(r"\([^)]*\d{3,4}p[^)]*\)", re.IGNORECASE)
 WEBSITE_RE = re.compile(r"(?:www\.)?[a-zA-Z0-9-]+\.(?:org|com|net|info|to|me|cc|io)\b", re.IGNORECASE)
 COMPOUND_TOKEN_RE = re.compile(
     r"\bDDP?\d[\s.]\d\b|\bDD\+\d[\s.]\d\b"
+    r"|\bAAC\d[\s.]\d\b"
     r"|\b[HhXx][\s.]?26[45]\b"
     r"|\b10[\s.]?bit\b|\b8[\s.]?bit\b"
     r"|\bHDR10(?:\+|plus)?\b|\bDTS[\s-]?HD\b"

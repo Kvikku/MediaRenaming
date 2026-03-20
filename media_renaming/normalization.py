@@ -9,8 +9,11 @@ from .constants import (
     BRACKET_RE,
     COMPOUND_TOKEN_RE,
     FRAMERATE_RE,
+    LANGUAGE_TAG_RE,
+    METADATA_PARENS_RE,
     MULTISPACE_RE,
     NORMALIZED_TOKEN_SET,
+    ORPHAN_PARENS_RE,
     RELEASE_GROUP_RE,
     RESOLUTION_RE,
     SEPARATOR_RE,
@@ -25,8 +28,15 @@ def normalize_token(token: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", token.lower())
 
 
+# Articles, conjunctions, prepositions that should stay lowercase mid-title
+_LOWERCASE_WORDS = {
+    "a", "an", "the", "and", "but", "or", "nor", "for", "yet", "so",
+    "in", "on", "at", "to", "by", "of", "from", "with", "as", "vs",
+}
+
+
 def smart_title(words: list[str]) -> str:
-    """Apply simple title casing while preserving acronyms and numbers."""
+    """Apply title casing: capitalize first/last word, lowercase articles mid-title."""
     title_words = []
     for word in words:
         if not word:
@@ -38,12 +48,20 @@ def smart_title(words: list[str]) -> str:
             title_words.append(word)
             continue
         title_words.append(word[:1].upper() + word[1:].lower())
+
+    # Lowercase articles/prepositions mid-title (not first or last)
+    for i in range(1, len(title_words) - 1):
+        if title_words[i].lower() in _LOWERCASE_WORDS:
+            title_words[i] = title_words[i].lower()
+
     return " ".join(title_words)
 
 
 def normalize_name(stem: str) -> str:
     """Strip metadata and format the cleaned title with an optional year."""
     cleaned = BRACKET_RE.sub(" ", stem)
+    # Strip parenthesized metadata blocks that contain resolution (e.g. (1080p x265 ...))
+    cleaned = METADATA_PARENS_RE.sub(" ", cleaned)
     cleaned = TRAILING_GROUP_RE.sub("", cleaned)
     # Strip website watermarks (e.g. www.UIndex.org, YTS.mx)
     cleaned = WEBSITE_RE.sub(" ", cleaned)
@@ -52,6 +70,10 @@ def normalize_name(stem: str) -> str:
     cleaned = COMPOUND_TOKEN_RE.sub(" ", cleaned)
     # Strip trailing release groups (e.g. -KyoGo, -SPARKS)
     cleaned = RELEASE_GROUP_RE.sub("", cleaned)
+    # Strip language tags (e.g. GER-ENG, ENG)
+    cleaned = LANGUAGE_TAG_RE.sub(" ", cleaned)
+    # Clean up orphaned/empty parentheses left after token removal
+    cleaned = ORPHAN_PARENS_RE.sub("", cleaned)
     cleaned = MULTISPACE_RE.sub(" ", cleaned).strip()
 
     words = []

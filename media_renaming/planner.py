@@ -8,11 +8,18 @@ from .constants import SUBTITLE_EXTENSIONS, VIDEO_EXTENSIONS
 from .normalization import normalize_name
 
 
-def unique_target_path(target: Path, reserved: set[Path]) -> Path:
+def _is_case_only_rename(source: Path, target: Path) -> bool:
+    """Check if the rename only changes letter casing (safe on case-insensitive FS)."""
+    return source.name.lower() == target.name.lower() and source.name != target.name
+
+
+def unique_target_path(target: Path, reserved: set[Path], source: Path | None = None) -> Path:
     """Ensure the target path is unique with an optional numeric suffix."""
-    if target not in reserved and not target.exists():
-        reserved.add(target)
-        return target
+    if target not in reserved:
+        # Allow case-only renames: the existing path IS the source
+        if not target.exists() or (source is not None and _is_case_only_rename(source, target)):
+            reserved.add(target)
+            return target
 
     base = target.stem
     suffix = target.suffix
@@ -54,14 +61,14 @@ def plan_file_renames(root: Path) -> list[tuple[Path, Path]]:
     for path in iter_video_files(root):
         normalized = normalize_name(path.stem)
         target = path.with_name(f"{normalized}{path.suffix}")
-        target = unique_target_path(target, reserved)
+        target = unique_target_path(target, reserved, source=path)
         if path.name == target.name:
             continue
         mappings.append((path, target))
         # Rename matching subtitle files alongside the video
         for sub in _find_subtitles(path):
             sub_target = sub.with_name(f"{target.stem}{sub.suffix}")
-            sub_target = unique_target_path(sub_target, reserved)
+            sub_target = unique_target_path(sub_target, reserved, source=sub)
             if sub.name != sub_target.name:
                 mappings.append((sub, sub_target))
     return mappings
@@ -98,13 +105,13 @@ def plan_organize(root: Path) -> list[tuple[Path, Path]]:
         folder_name = normalize_name(video.stem)
         target_dir = root / folder_name
         target = target_dir / video.name
-        target = unique_target_path(target, reserved)
+        target = unique_target_path(target, reserved, source=video)
         mappings.append((video, target))
 
         # Move matching subtitle files alongside the video
         for sub in _find_subtitles(video):
             sub_target = target_dir / sub.name
-            sub_target = unique_target_path(sub_target, reserved)
+            sub_target = unique_target_path(sub_target, reserved, source=sub)
             mappings.append((sub, sub_target))
 
     return mappings
@@ -119,8 +126,10 @@ def plan_folder_renames(root: Path) -> list[tuple[Path, Path]]:
             continue
         normalized = normalize_name(path.name)
         target = path.with_name(normalized)
-        target = unique_target_path(target, reserved)
+        # Skip if normalization produces the same name (identity rename)
         if path.name == target.name:
+            reserved.add(path)
             continue
+        target = unique_target_path(target, reserved, source=path)
         mappings.append((path, target))
     return mappings
