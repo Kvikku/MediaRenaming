@@ -46,14 +46,14 @@ def normalize_name(stem: str) -> str:
     cleaned = MULTISPACE_RE.sub(" ", cleaned).strip()
 
     words = []
-    year = None
+    year_candidate = None
     for raw in cleaned.split(" "):
         token = raw.strip("-_")
         if not token:
             continue
         normalized = normalize_token(token)
-        if YEAR_RE.match(token) and year is None:
-            year = token
+        if YEAR_RE.match(token) and year_candidate is None:
+            year_candidate = token
             continue
         if RESOLUTION_RE.match(normalized) or FRAMERATE_RE.match(normalized):
             continue
@@ -62,6 +62,14 @@ def normalize_name(stem: str) -> str:
         if normalized in NORMALIZED_TOKEN_SET:
             continue
         words.append(token)
+
+    # If removing the year left no title words, treat it as part of the title
+    year = None
+    if year_candidate is not None:
+        if words:
+            year = year_candidate
+        else:
+            words.append(year_candidate)
 
     title = smart_title(words)
     if not title:
