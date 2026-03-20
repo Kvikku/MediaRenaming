@@ -9,17 +9,27 @@ from .planner import plan_file_renames, plan_folder_renames
 from .tui import launch_interactive_ui
 
 
-def run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> None:
-    """Execute or preview renames based on the apply flag."""
-    if not mappings:
-        return
+def run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> list[tuple[Path, Path]]:
+    """Execute or preview renames based on the apply flag.
 
+    Returns the list of successfully applied rename pairs.
+    """
+    if not mappings:
+        return []
+
+    applied: list[tuple[Path, Path]] = []
     for source, target in mappings:
         if apply_changes:
-            source.rename(target)
+            try:
+                source.rename(target)
+            except OSError as exc:
+                print(f"FAILED: {source} -> {target}  ({exc})")
+                continue
+            applied.append((source, target))
             print(f"Renamed: {source} -> {target}")
         else:
             print(f"Dry-run: {source} -> {target}")
+    return applied
 
 
 def parse_args() -> argparse.Namespace:

@@ -44,7 +44,7 @@ def plan_file_renames(root: Path) -> list[tuple[Path, Path]]:
         normalized = normalize_name(path.stem)
         target = path.with_name(f"{normalized}{path.suffix}")
         target = unique_target_path(target, reserved)
-        if path == target:
+        if path.name == target.name:
             continue
         mappings.append((path, target))
     return mappings
@@ -60,7 +60,7 @@ def plan_folder_renames(root: Path) -> list[tuple[Path, Path]]:
         normalized = normalize_name(path.name)
         target = path.with_name(normalized)
         target = unique_target_path(target, reserved)
-        if path == target:
+        if path.name == target.name:
             continue
         mappings.append((path, target))
     return mappings

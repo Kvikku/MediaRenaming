@@ -99,17 +99,26 @@ def _prompt_yes_no(prompt: str, default: bool = True) -> bool:
         print(f"  {_c('⚠', FG_YELLOW)}  Please enter y or n.")
 
 
-def _run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> None:
+def _run_renames(mappings: list[tuple[Path, Path]], apply_changes: bool) -> list[tuple[Path, Path]]:
+    """Execute or preview renames. Returns successfully applied pairs."""
     if not mappings:
-        return
+        return []
+    applied: list[tuple[Path, Path]] = []
     for source, target in mappings:
         if apply_changes:
-            source.rename(target)
+            try:
+                source.rename(target)
+            except OSError as exc:
+                print(f"  {_c('✖', FG_RED, BOLD)}  {source.name}")
+                print(f"     {_c('⚠', FG_YELLOW)}  {exc}")
+                continue
+            applied.append((source, target))
             print(f"  {_c('✔', FG_GREEN, BOLD)}  {source.name}")
             print(f"     {_c('➜', FG_CYAN)}  {target.name}")
         else:
             print(f"  {_c('…', FG_YELLOW)}  {source.name}")
             print(f"     {_c('➜', FG_CYAN)}  {target.name}")
+    return applied
 
 
 # ── Header / status ─────────────────────────────────────────────────────────
@@ -341,14 +350,21 @@ def launch_interactive_ui(initial_path: str | None = None,
                     continue
 
             print()
-            _run_renames(file_mappings, apply_changes)
-            _run_renames(folder_mappings, apply_changes)
+            applied_files = _run_renames(file_mappings, apply_changes)
+            applied_folders = _run_renames(folder_mappings, apply_changes)
 
             if not apply_changes:
                 print(f"\n  {_c('ℹ', FG_CYAN)}  Dry-run complete. Toggle mode (5) to apply for real.")
             else:
-                record_renames(root, file_mappings + folder_mappings)
-                print(f"\n  {_c('🎉', BOLD)}  All done! Renames applied successfully.")
+                all_applied = applied_files + applied_folders
+                if all_applied:
+                    record_renames(root, all_applied)
+                total = len(file_mappings) + len(folder_mappings)
+                failed = total - len(all_applied)
+                if failed:
+                    print(f"\n  {_c('⚠', FG_YELLOW, BOLD)}  Done with {failed} failure(s).")
+                else:
+                    print(f"\n  {_c('🎉', BOLD)}  All done! Renames applied successfully.")
                 file_mappings = plan_file_renames(root)
                 folder_mappings = plan_folder_renames(root)
             _pause()
