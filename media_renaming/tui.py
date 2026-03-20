@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from .planner import plan_file_renames, plan_folder_renames
+from .storage import load_recent_folders, save_recent_folder, record_renames, load_history
 
 # ── ANSI helpers ─────────────────────────────────────────────────────────────
 
@@ -146,7 +147,8 @@ MENU_ITEMS = [
     ("4", "📁", "Preview folder renames"),
     ("5", "🔀", "Toggle mode (dry-run / apply)"),
     ("6", "🚀", "Run planned operation"),
-    ("7", "👋", "Exit"),
+    ("7", "�", "View rename history"),
+    ("8", "�👋", "Exit"),
 ]
 
 
@@ -178,9 +180,48 @@ def _print_mappings(mappings: list[tuple[Path, Path]], heading: str, icon: str,
         print(f"\n  {_c(f'… and {total - limit} more', DIM)}")
 
 
+# ── History display ───────────────────────────────────────────────────────────
+
+def _print_history(limit: int = 20) -> None:
+    sessions = load_history()
+    total = len(sessions)
+    print(f"\n  📜  {_c('Rename history', BOLD, FG_CYAN)}  {_c(f'({total} sessions)', DIM)}")
+    print(f"  {'─' * 58}")
+
+    if not sessions:
+        print(f"  {_c('No rename history yet.', DIM)}")
+        return
+
+    for session in reversed(sessions[-limit:]):
+        ts = session.get('timestamp', '?')[:19].replace('T', ' ')
+        folder = session.get('folder', '?')
+        count = len(session.get('renames', []))
+        print(f"    {_c(ts, FG_GRAY)}  {_c(str(count), FG_GREEN, BOLD)} renames")
+        print(f"      📂 {folder}")
+        for entry in session.get('renames', [])[:5]:
+            print(f"        {_c('•', FG_GRAY)}  {entry.get('from', '?')}")
+            print(f"           {_c('➜', FG_GREEN)}  {_c(entry.get('to', '?'), FG_GREEN)}")
+        remaining = count - 5
+        if remaining > 0:
+            print(f"        {_c(f'… and {remaining} more', DIM)}")
+        print()
+
+
 # ── Directory prompt ─────────────────────────────────────────────────────────
 
 def _prompt_directory(default_path: Path | None = None) -> Path | None:
+    recent = load_recent_folders()
+    valid_recent = [f for f in recent if Path(f).is_dir()]
+
+    if valid_recent:
+        print(f"\n  {_c('Recent folders:', BOLD, FG_CYAN)}")
+        for idx, folder in enumerate(valid_recent, 1):
+            print(f"    {_c(str(idx), FG_CYAN, BOLD)}  {folder}")
+        print(f"    {_c('0', FG_CYAN, BOLD)}  Enter a new path")
+        pick = input(f"\n  Pick a recent folder or 0 for new [{_c('0', DIM)}]: ").strip()
+        if pick.isdigit() and 1 <= int(pick) <= len(valid_recent):
+            return Path(valid_recent[int(pick) - 1])
+
     hint = f" {_c(f'[{default_path}]', DIM)}" if default_path else ""
     raw = input(f"  📂  Enter media root directory{hint}: ").strip()
 
@@ -213,6 +254,13 @@ def launch_interactive_ui(initial_path: str | None = None,
         candidate = Path(initial_path).expanduser().resolve()
         if candidate.exists() and candidate.is_dir():
             root = candidate
+            save_recent_folder(root)
+            file_mappings = plan_file_renames(root)
+            folder_mappings = plan_folder_renames(root)
+    else:
+        recent = load_recent_folders()
+        if recent and Path(recent[0]).is_dir():
+            root = Path(recent[0])
             file_mappings = plan_file_renames(root)
             folder_mappings = plan_folder_renames(root)
 
@@ -221,13 +269,14 @@ def launch_interactive_ui(initial_path: str | None = None,
         _print_header(root, apply_changes, len(file_mappings), len(folder_mappings))
         _print_menu()
 
-        choice = input(f"  {_c('❯', FG_CYAN, BOLD)} Enter choice [1-7]: ").strip()
+        choice = input(f"  {_c('❯', FG_CYAN, BOLD)} Enter choice [1-8]: ").strip()
 
         # 1 — Select folder
         if choice == "1":
             selected = _prompt_directory(root)
             if selected is not None:
                 root = selected
+                save_recent_folder(root)
                 file_mappings = plan_file_renames(root)
                 folder_mappings = plan_folder_renames(root)
                 print(f"\n  {_c('✔', FG_GREEN, BOLD)}  Folder selected & plan updated.")
@@ -298,16 +347,23 @@ def launch_interactive_ui(initial_path: str | None = None,
             if not apply_changes:
                 print(f"\n  {_c('ℹ', FG_CYAN)}  Dry-run complete. Toggle mode (5) to apply for real.")
             else:
+                record_renames(root, file_mappings + folder_mappings)
                 print(f"\n  {_c('🎉', BOLD)}  All done! Renames applied successfully.")
                 file_mappings = plan_file_renames(root)
                 folder_mappings = plan_folder_renames(root)
             _pause()
             continue
 
-        # 7 — Exit
+        # 7 — View history
         if choice == "7":
+            _print_history()
+            _pause()
+            continue
+
+        # 8 — Exit
+        if choice == "8":
             print(f"\n  {_c('👋  See you!', FG_CYAN, BOLD)}\n")
             return 0
 
-        print(f"  {_c('⚠', FG_YELLOW)}  Invalid choice — pick a number from 1 to 7.")
+        print(f"  {_c('⚠', FG_YELLOW)}  Invalid choice — pick a number from 1 to 8.")
         _pause()
